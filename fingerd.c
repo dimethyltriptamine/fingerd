@@ -111,7 +111,7 @@ main(int argc, char **argv)
 	
 	addr.sin_port = htons(port);
 	addr.sin_family = AF_INET;
-	inet_pton(AF_INET, "bind_addr", &addr.sin_addr);
+	inet_pton(AF_INET, bind_address, &addr.sin_addr);
 	
 	if(bind(sockfd,(struct sockaddr*)&addr,len) == -1) {
 		fprintf(stderr,"Error binding: %s\n",strerror(errno));
@@ -121,6 +121,7 @@ main(int argc, char **argv)
 		fprintf(stderr,"Error on listen(): %s\n",strerror(errno));
 		return -1;
 	}
+	syslog(1,"Binded fingerd in %s:%i",bind_address,port);
 	while(1) {
 		clientfd = accept(sockfd,(struct sockaddr*)&client_addr,&len);
 		if(clientfd == -1) {
