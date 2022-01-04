@@ -21,6 +21,8 @@
 #include <string.h>
 #include <pwd.h>
 #include <fcntl.h>
+#include <syslog.h>
+#include <stdlib.h>
 
 int sockfd, clientfd;
 
@@ -38,6 +40,16 @@ read_from_sock(int sockfd, char *user, size_t size)
 		return -1;
 	} else
 		strncpy(user,buf,size); /* size shouldn't be >256 */
+	return 0;
+}
+
+int
+logger(struct sockaddr_in client, char *user)
+{
+	char *client_addr = inet_ntoa(client.sin_addr);
+	user[strcspn(user, "\n")] = 0;
+
+	syslog(0,"Sending %s's plan to %s",user,client_addr);
 	return 0;
 }
 
@@ -63,26 +75,43 @@ write_plan(const char *user, int clientfd)
 	while((read_bytes = read(plan_fd, plan_buf, 8192)) > 0)
 		write(clientfd,plan_buf,read_bytes);
 	memset(plan_buf,0,812);
+	close(plan_fd);
 	return 0;
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
+	/* Initiate logger */
+	openlog("fingerd", LOG_PID|LOG_PERROR,0);
+	
 	sockfd = socket(AF_INET,SOCK_STREAM,0); /* TODO: IPv6 support */
-	struct sockaddr_in addr;
+	struct sockaddr_in addr, client_addr;
 	char user[256];
 	socklen_t len = sizeof(addr);
 	if(sockfd == -1) {
 		fprintf(stderr,"Error creating socket: %s\n",strerror(errno));
 		return -1;
 	}
-	/* TODO: ask user where to bind using a config file or something
-	 * like that */
+
+	char *bind_address = "0.0.0.0";
+	int port = 79;
+	int c;
+	while((c = getopt(argc, argv,"p:a:")) != -1) {
+		switch(c) {
+		case 'p':
+			port = atoi(optarg);
+			break;
+		case 'a':
+			bind_address = optarg;
+			break;
+		}
+
+	}
 	
-	addr.sin_port = htons(79);
+	addr.sin_port = htons(port);
 	addr.sin_family = AF_INET;
-	inet_pton(AF_INET, "0.0.0.0", &addr.sin_addr);
+	inet_pton(AF_INET, "bind_addr", &addr.sin_addr);
 	
 	if(bind(sockfd,(struct sockaddr*)&addr,len) == -1) {
 		fprintf(stderr,"Error binding: %s\n",strerror(errno));
@@ -93,13 +122,19 @@ main(void)
 		return -1;
 	}
 	while(1) {
-		clientfd = accept(sockfd,(struct sockaddr*)&addr,&len);
+		clientfd = accept(sockfd,(struct sockaddr*)&client_addr,&len);
 		if(clientfd == -1) {
 			fprintf(stderr,"Error on accept(): %s\n",strerror(errno));
 			return -1;
 		}
-
+		
 		read_from_sock(clientfd,user,256);
+		/* Some clients do whathever the fuck they want */
+		
+		if(user[0] == ' ')
+			memmove(user, user+1, strlen(user));
+
+		logger(client_addr,user);
 		write_plan(user,clientfd);
 		close(clientfd);
 	}
