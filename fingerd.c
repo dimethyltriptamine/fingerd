@@ -56,7 +56,8 @@ logger(struct sockaddr_in client, char *user)
 {
 	char *client_addr = inet_ntoa(client.sin_addr);
 	user[strcspn(user, "\n")] = 0;
-
+	if(user[0] == '\r' && user[1] == '\n')
+		user = "\0";
 	if(strlen(user) == 0)
 		syslog(LOG_INFO,"Sending default plan to %s",client_addr);
 	else
@@ -68,6 +69,7 @@ int
 write_plan(const char *user, int clientfd)
 {
 	/* Check if string is empty */
+
 	if(strlen(user) == 0) {
 		char *s = "This is the default fingerd message, you gave no user\n";
 		write(clientfd,s,strlen(s));
@@ -148,6 +150,13 @@ main(int argc, char **argv)
 		}
 		
 		read_from_sock(clientfd,user,256);
+		/* Empty string if nothing was given */
+		if(user[0] == '\r' && user[1] == '\n')
+		     for(int i = 0; i<=256; i++)
+				user[i] = 0;
+#ifdef debug
+		puts(user);
+#endif
 		/* Some clients do whathever the fuck they want */
 		
 		if(user[0] == ' ')
