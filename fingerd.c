@@ -35,7 +35,7 @@ read_from_sock(int sockfd, char *user, size_t size)
 {
 	char buf[256];
 	if(read(sockfd,buf,256) == -1) {
-		fprintf(stderr,"Error reading from socket: %s\n"
+		syslog(LOG_CRIT,"Error reading from socket: %s\n"
 			,strerror(errno));
 		return -1;
 	} else
@@ -49,7 +49,7 @@ logger(struct sockaddr_in client, char *user)
 	char *client_addr = inet_ntoa(client.sin_addr);
 	user[strcspn(user, "\n")] = 0;
 
-	syslog(0,"Sending %s's plan to %s",user,client_addr);
+	syslog(LOG_INFO,"Sending %s's plan to %s",user,client_addr);
 	return 0;
 }
 
@@ -69,7 +69,7 @@ write_plan(const char *user, int clientfd)
 	int plan_fd = open(plan_file,O_RDONLY); /* I wouldn't change the
 									 * O_RDONLY thing */
 	if(plan_fd == -1) {
-		fprintf(stderr,"Error opening file: %s",strerror(errno));
+	     syslog(LOG_CRIT,"Error opening file: %s",strerror(errno));
 		return -1;
 	}
 	while((read_bytes = read(plan_fd, plan_buf, 8192)) > 0)
@@ -90,7 +90,7 @@ main(int argc, char **argv)
 	char user[256];
 	socklen_t len = sizeof(addr);
 	if(sockfd == -1) {
-		fprintf(stderr,"Error creating socket: %s\n",strerror(errno));
+		syslog(LOG_CRIT,"Error creating socket: %s\n",strerror(errno));
 		return -1;
 	}
 
@@ -108,24 +108,23 @@ main(int argc, char **argv)
 		}
 
 	}
-	
 	addr.sin_port = htons(port);
 	addr.sin_family = AF_INET;
 	inet_pton(AF_INET, bind_address, &addr.sin_addr);
 	
 	if(bind(sockfd,(struct sockaddr*)&addr,len) == -1) {
-		fprintf(stderr,"Error binding: %s\n",strerror(errno));
+		syslog(LOG_CRIT,"Error binding: %s\n",strerror(errno));
 		return -1;
 	}
 	if(listen(sockfd,5) == -1) {
-		fprintf(stderr,"Error on listen(): %s\n",strerror(errno));
+		syslog(LOG_CRIT,"Error on listen(): %s\n",strerror(errno));
 		return -1;
 	}
 	syslog(1,"Binded fingerd in %s:%i",bind_address,port);
 	while(1) {
 		clientfd = accept(sockfd,(struct sockaddr*)&client_addr,&len);
 		if(clientfd == -1) {
-			fprintf(stderr,"Error on accept(): %s\n",strerror(errno));
+			syslog(LOG_CRIT,"Error on accept(): %s\n",strerror(errno));
 			return -1;
 		}
 		
