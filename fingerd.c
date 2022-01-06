@@ -23,12 +23,20 @@
 #include <fcntl.h>
 #include <syslog.h>
 #include <stdlib.h>
+#include <signal.h>
 
 int sockfd, clientfd;
 
-#define DEBUG 1
 
-/* TODO: Use pointers to char instead of arrays lol */
+void sigterm_handle(int signal)
+{
+	syslog(LOG_NOTICE,"SIGINT recieved. Dying");
+	close(sockfd);
+	close(clientfd);
+	exit(EXIT_SUCCESS);
+
+}
+
 
 int
 read_from_sock(int sockfd, char *user, size_t size)
@@ -49,33 +57,42 @@ logger(struct sockaddr_in client, char *user)
 	char *client_addr = inet_ntoa(client.sin_addr);
 	user[strcspn(user, "\n")] = 0;
 
-	syslog(LOG_INFO,"Sending %s's plan to %s",user,client_addr);
+	if(strlen(user) == 0)
+		syslog(LOG_INFO,"Sending default plan to %s",client_addr);
+	else
+		syslog(LOG_INFO,"Sending %s's plan to %s",user,client_addr);
 	return 0;
 }
 
 int
 write_plan(const char *user, int clientfd)
 {
-	struct passwd *user_info = getpwnam(user);
-	if(user_info == NULL) {
-		return -1;
-	}
-	char plan_buf[8192];
-	char plan_file[256]; /* From bell labs */
-	char *user_homedir = user_info->pw_dir;
-	int read_bytes;
+	/* Check if string is empty */
+	if(strlen(user) == 0) {
+		char *s = "This is the default fingerd message, you gave no user\n";
+		write(clientfd,s,strlen(s));
+	} else {
+		struct passwd *user_info = getpwnam(user);
+		if(user_info == NULL) {
+			return -1;
+		}
+		char plan_buf[8192];
+		char plan_file[256]; /* From bell labs */
+		char *user_homedir = user_info->pw_dir;
+		int read_bytes;
 
-	snprintf(plan_file,256,"%s/.plan",user_homedir);
-	int plan_fd = open(plan_file,O_RDONLY); /* I wouldn't change the
-									 * O_RDONLY thing */
-	if(plan_fd == -1) {
-	     syslog(LOG_CRIT,"Error opening file: %s",strerror(errno));
-		return -1;
+		snprintf(plan_file,256,"%s/.plan",user_homedir);
+		int plan_fd = open(plan_file,O_RDONLY); /* I wouldn't change the
+										 * O_RDONLY thing */
+		if(plan_fd == -1) {
+			syslog(LOG_CRIT,"Error opening file: %s",strerror(errno));
+			return -1;
+		}
+		while((read_bytes = read(plan_fd, plan_buf, 8192)) > 0)
+			write(clientfd,plan_buf,read_bytes);
+		memset(plan_buf,0,812);
+		close(plan_fd);
 	}
-	while((read_bytes = read(plan_fd, plan_buf, 8192)) > 0)
-		write(clientfd,plan_buf,read_bytes);
-	memset(plan_buf,0,812);
-	close(plan_fd);
 	return 0;
 }
 
@@ -84,6 +101,8 @@ main(int argc, char **argv)
 {
 	/* Initiate logger */
 	openlog("fingerd", LOG_PID|LOG_PERROR,0);
+	/* Signal handler */
+	signal(SIGINT,sigterm_handle);
 	
 	sockfd = socket(AF_INET,SOCK_STREAM,0); /* TODO: IPv6 support */
 	struct sockaddr_in addr, client_addr;
