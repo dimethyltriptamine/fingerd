@@ -56,8 +56,6 @@ logger(struct sockaddr_in client, char *user)
 {
 	char *client_addr = inet_ntoa(client.sin_addr);
 	user[strcspn(user, "\n")] = 0;
-	if(user[0] == '\r' && user[1] == '\n')
-		user = "\0";
 	if(strlen(user) == 0)
 		syslog(LOG_INFO,"Sending default plan to %s",client_addr);
 	else
@@ -154,9 +152,12 @@ main(int argc, char **argv)
 		if(user[0] == '\r' && user[1] == '\n')
 		     for(int i = 0; i<=256; i++)
 				user[i] = 0;
+		user[strcspn(user, "\r")] = '\n';
+		user[strcspn(user, "\n")] = '\0';
 #ifdef debug
 		puts(user);
 #endif
+		
 		/* Some clients do whathever the fuck they want */
 		
 		if(user[0] == ' ')
