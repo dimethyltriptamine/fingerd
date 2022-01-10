@@ -74,6 +74,9 @@ write_plan(const char *user, int clientfd)
 	} else {
 		struct passwd *user_info = getpwnam(user);
 		if(user_info == NULL) {
+			syslog(LOG_ERR,"user %s does not exist\n",user);
+			char *s = "User does not exist.\n";
+			write(clientfd, s, strlen(s));
 			return -1;
 		}
 		char plan_buf[8192];
@@ -85,7 +88,9 @@ write_plan(const char *user, int clientfd)
 		int plan_fd = open(plan_file,O_RDONLY); /* I wouldn't change the
 										 * O_RDONLY thing */
 		if(plan_fd == -1) {
-			syslog(LOG_CRIT,"Error opening file: %s",strerror(errno));
+			syslog(LOG_CRIT,"Error opening file: %s\n",strerror(errno));
+			char *s = "User does not have a plan file\n";
+			write(clientfd, s, strlen(s));
 			return -1;
 		}
 		while((read_bytes = read(plan_fd, plan_buf, 8192)) > 0)
